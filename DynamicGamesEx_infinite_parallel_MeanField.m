@@ -2,16 +2,16 @@ clc
 clear
 T=30; % horizon
 
-Nx = 1; %possible private states = Nx+1
-Na = 1; %possible actions = Na+1
+numStates = 2; % 0 = healthy 1 = infected
+% numActions = 1; % Couldn't see this being used anywhere
 q = 0.9;
 
-delD = 0.9; % discount factor for infinite horizon reward.
-delI = 1; % discount factor for equilibrium update. It dampens the step size
+discountFactorInfHoriz = 0.9; % discount factor for infinite horizon reward.
+discountFactorEquilibUpdate = 1; % discount factor for equilibrium update. It dampens the step size
 
 N=40; %resolution for g space
-g1v=(0:N)*(1/N);
-xv=0:1/Nx:1;
+g1v=(0:N)*(1/N); % Population of healthy nodes
+xv=0:1/(numStates-1):1;
 
 results=[];
 p1Lm=0.5*ones(1,N+1); % they are symmetric
@@ -20,14 +20,13 @@ p1Hm=zeros(1,N+1);
 u1Lm=zeros(1,N+1);
 u1Hm=zeros(1,N+1);
 
-k=0.2;
-L=0.5;
+k=0.2; % k + zt(1) = risk of being infected
+L=0.5; % Lambda - cost of repair
 
-for t=1:T
+for t=1:T % 2. For t = T, T − 1, . . . 1, ∀ z t
     t % DISPLAY
     p1Lm_n=zeros(1,N+1);
     p1Hm_n=zeros(1,N+1);
-    
     u1Lm_n=zeros(1,N+1);
     u1Hm_n=zeros(1,N+1);
     
@@ -35,13 +34,13 @@ for t=1:T
         g1=g1v(i1);  
         
         % Initial equilibrium guess
-        p1L = p1Lm(i1);
-        p1H = p1Hm(i1);
+        p1L = p1Lm(i1); % Probability of doing nothing given ith node is healthy
+        p1H = p1Hm(i1); % Probability of repairing given ith node is unhealthy
         
         err = 1;
         count = 0;
         
-        while err > 1e-5 || count <=1000
+        while err > 1e-5 || count <=1000 % Policy iteration
             count = count+1;
             %z_n = z_t(1)*(1-p1L)*Q_x(1|1,1,z_t) + z_t(1)*p1L*Q_x(1|1,2,z_t) + z_t(2)*(1-p1H)*Q_x(1|2,1,z_t)+ z_t(2)*p1H*Q_x(1|2,2,z_t);
             g1_n = g1*(1-p1L)*(1-q) + g1*p1L*1 + 0+ (1-g1)*p1H*1;
@@ -50,24 +49,24 @@ for t=1:T
             [V1H]=reward2go_0_inf(g1v,g1_n,u1Hm);
             
             % User 1 state L
-            u1L_0 = 0 + delD* ((1-q)*V1L + q*V1H) ;
-            u1L_1 = -L + delD* V1L ;
+            u1L_0 = 0 + discountFactorInfHoriz * ((1-q)*V1L + q*V1H) ;
+            u1L_1 = -L + discountFactorInfHoriz * V1L ;
             u1L_s = (1-p1L)*u1L_0 + p1L*u1L_1;
-            phi1L_0 = delI*max( 0, u1L_0 - u1L_s);
-            phi1L_1 = delI*max( 0, u1L_1 - u1L_s);
-            p1L_n = (p1L + phi1L_1)/ (1 + phi1L_0 + phi1L_1 );
-            
+            phi1L_0 = discountFactorEquilibUpdate*max( 0, u1L_0 - u1L_s);
+            phi1L_1 = discountFactorEquilibUpdate*max( 0, u1L_1 - u1L_s);
+            p1L_n = (p1L + phi1L_1)/ (1 + phi1L_0 + phi1L_1 ); % Eq 37
             
             % User 1 , state H
-            u1H_0 = -(k+1-g1)+ delD*(V1H ) ;
-            u1H_1 = -(k+1-g1)-L+ delD*(V1L) ;
+            u1H_0 = -(k+1-g1)+ discountFactorInfHoriz*(V1H ) ;
+            u1H_1 = -(k+1-g1)-L+ discountFactorInfHoriz*(V1L) ;
             u1H_s =  (1-p1H)* u1H_0 +  (p1H)* u1H_1;
-            phi1H_0 = delI*max( 0, u1H_0 - u1H_s);
-            phi1H_1 = delI*max( 0, u1H_1 - u1H_s);
-            p1H_n = (p1H + phi1H_1)/ (1 + phi1H_0 + phi1H_1 );
-            
+            phi1H_0 = discountFactorEquilibUpdate*max( 0, u1H_0 - u1H_s);
+            phi1H_1 = discountFactorEquilibUpdate*max( 0, u1H_1 - u1H_s);
+            p1H_n = (p1H + phi1H_1)/ (1 + phi1H_0 + phi1H_1 ); % Eq 37
+
             err = norm([p1L p1H ] - [p1L_n p1H_n ]);
             
+
             p1L = p1L_n;
             p1H = p1H_n;
             
@@ -78,12 +77,12 @@ for t=1:T
        [V1H]=reward2go_0_inf(g1v,g1_n,u1Hm);
 
         % User 1 state L
-        u1L_0 = 0 + delD* ((1-q)*V1L + q*V1H) ;
-        u1L_1 = -L + delD* V1L ;
+        u1L_0 = 0 + discountFactorInfHoriz* ((1-q)*V1L + q*V1H) ;
+        u1L_1 = -L + discountFactorInfHoriz* V1L ;
 
         % User 1 , state H
-        u1H_0 = -(k+1-g1)+ delD*(V1H ) ;
-        u1H_1 = -(k+1-g1)-L+ delD*(V1L) ;
+        u1H_0 = -(k+1-g1)+ discountFactorInfHoriz*(V1H ) ;
+        u1H_1 = -(k+1-g1)-L+ discountFactorInfHoriz*(V1L) ;
         
         u1L = (1-p1L) * u1L_0 + p1L * u1L_1;
         u1H = (1-p1H)* u1H_0 +  (p1H)* u1H_1;
